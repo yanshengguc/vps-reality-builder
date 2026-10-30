@@ -27,9 +27,10 @@ vps-reality-builder/
 │   ├── deploy_reality.sh           # Reality 部署脚本(密钥生成/配置合并/校验/回滚)
 │   └── gen_client_config.py        # 客户端三件套生成:vless 链接 / 二维码 / 参数明细
 └── references/
-    ├── azure.md                    # az CLI wrapper、设备码登录、区域限制策略、NSG 命令
+    ├── azure.md                    # az CLI wrapper、设备码登录、区域限制策略、NSG 命令、换公网 IP
     ├── gcp.md                      # gcloud 登录、e2-micro 免费层、防火墙规则
-    └── troubleshooting.md          # 端口不通三层诊断、x25519 解析坑、IP 被墙判断
+    ├── troubleshooting.md          # 端口不通三层诊断、x25519 解析坑、卡顿诊断、IP 被墙判断
+    └── v2rayn-client.md            # v2rayN 客户端:配置地图、TUN/全局/分流判定、DNS 走代理陷阱
 ```
 
 ## 它解决什么问题
@@ -40,6 +41,8 @@ vps-reality-builder/
 - **Xray 26.x 的 `x25519` 输出格式变了**(`PrivateKey:` 冒号后无空格、字段名带空格变化),脚本解析不当会拿到空私钥 → 配置校验失败 → **服务中断**。`deploy_reality.sh` 内置健壮解析,且遵循「改前备份、`-test` 校验、失败回滚」原则。
 - **共存而非替换**:新增 443 inbound 时不删旧配置,不影响已在跑的旧节点。
 - **云厂商差异**:Azure 学生订阅存在系统级区域白名单(用户不可改),GCP 无区域限制且免费层覆盖美国区——选区建议直接写在技能里。
+- **能连不等于用着快**:客户端开了 TUN + 全局,国内流量也会绕境外;更隐蔽的是 Xray 的 DNS 模块查询全部经代理发出,国内域名被解析成海外 CDN,`geosite:cn` 直连规则形同虚设(实测百度 2109ms,比 Google 的 765ms 还慢)。
+- **IP 被封不等于要重装**:三步定性(端口矩阵 / 境外回连 / 路由),换 IP 时服务端一行都不用改,但必须同步移除明文 inbound,否则新 IP 会以同样方式再被封。
 
 ## 快速了解流程
 
@@ -49,6 +52,8 @@ vps-reality-builder/
 ```
 
 详细的执行规范见 [SKILL.md](SKILL.md)(面向 AI Agent 编写,人类读者把它当流程文档看也完全可以)。
+
+部署完之后的三类运维场景也写进去了:**节点卡顿**(先分清跨境丢包 / 全局模式 / DNS 解析错误)、**IP 被封**(三步定性 + 换 IP)、**客户端分流不生效**(TUN 与 DNS 出口)。
 
 ## 安全设计
 
