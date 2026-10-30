@@ -1,6 +1,6 @@
 ---
 name: vps-reality-builder
-description: 云 VPS 搭建 + VLESS Reality 代理节点部署全流程技能。覆盖 Azure/GCP/任意 Ubuntu VPS:CLI 登录、创建 VM、双层防火墙(NSG+ufw)、Xray Reality 443 部署、客户端 vless 链接与二维码生成、连通性诊断。当用户提到"搭 VPS/建服务器/开云主机/搭节点/Reality/xray/v2rayN 节点/科学上网服务器/美国节点/日本节点/检查 IP/端口不通"等任何涉及购买或配置云服务器做代理的场景时,必须使用本技能,即使用户没有明说"Reality"或"代理"字样。也适用于已部署节点出问题时的排查(端口不通、连不上、IP 被墙)。
+description: 云 VPS 搭建 + VLESS Reality 代理节点部署全流程技能。覆盖 Azure/GCP/任意 Ubuntu VPS:CLI 登录、创建 VM、双层防火墙(NSG+ufw)、Xray Reality 443 部署、客户端 vless 链接与二维码生成、连通性诊断;以及 v2rayN 客户端侧的 TUN/全局/分流配置与卡顿排查(DNS 走代理导致分流失效、国内站变慢)。当用户提到"搭 VPS/建服务器/开云主机/搭节点/Reality/xray/v2rayN 节点/科学上网服务器/美国节点/日本节点/检查 IP/端口不通/开 TUN/全局还是分流/国内网站分流/节点卡顿"等任何涉及购买或配置云服务器做代理的场景时,必须使用本技能,即使用户没有明说"Reality"或"代理"字样。也适用于已部署节点出问题时的排查(端口不通、连不上、IP 被墙、能连但慢)。
 ---
 
 # VPS Reality Builder
@@ -12,9 +12,11 @@ description: 云 VPS 搭建 + VLESS Reality 代理节点部署全流程技能。
 1. **绝不用浏览器自动化操作云门户**。本机环境拉起的浏览器窗口用户看不到(渲染正常但 GUI 不显示),用户没法在里面登录。一律走 CLI + 设备码登录,登录动作(密码/MFA)永远由用户本人完成,AI 不碰凭据。
 2. **节点密钥绝不外泄**。UUID/私钥/分享链接只写入用户本地文件(如 `vless-node-info.md`),不打印到无关日志、不提交任何仓库、不放进记忆文件。
 3. **改 xray 配置前必须 `-test` 校验,失败立即用 `.bak` 回滚**。用户现有节点往往在跑,服务中断是事故。
-4. **新增 inbound 共存,不删旧配置**——用户的旧节点可能还在用。
+4. **新增 inbound 共存,但明文协议绝不许与 Reality 同机**——旧节点可能还在用,所以默认保留;但 VMess / Shadowsocks 这类**无 TLS 明文协议**一旦被识别,GFW 封的是**整个 IP**,会把同机的 Reality、Hysteria2 一起拖死(2026-10-29 实战:10086 明文 VMess 导致 Reality+Hysteria2 全灭)。发现同机存在明文 inbound,必须向用户明确提示风险并建议移除。
 5. 破坏性操作(删 VM/删资源组/重置配置)先向用户确认。
 6. 冗余输出重定向到文件,控制 token 消耗;SSH 命令用脚本文件 `ssh 'bash -s' < script.sh` 传递,避免嵌套引号地狱。
+7. **任何新开端口必须端到端验证,不能只看服务端状态**——服务端 `ss -lunp` 显示监听、`systemctl is-active` 显示 active,**都不等于外网能连**(ufw/NSG 在服务端内部完全看不见)。必须"本地发包 + 服务器 tcpdump 抓包"或客户端实连确认。2026-10-29 教训:Hysteria2 部署一个月,NSG 从未放行 UDP 443,服务一直空跑。
+8. **客户端分流必须验 DNS 出口,不能只看路由规则**——运行时配置里有 `geosite:cn → direct` 不代表分流生效。Xray 的 DNS 模块查询若经代理发出,国内域名会被解析成海外 CDN 节点,`geoip:cn` 匹配不上,规则等于白写(2026-10-30 实战:baidu 2109ms 比 google 765ms 还慢)。判定与修法见 [references/v2rayn-client.md](references/v2rayn-client.md)。
 
 ## 流程总览
 
@@ -75,8 +77,72 @@ echo | openssl s_client -connect <IP>:443 -servername <SNI> 2>/dev/null | grep -
 
 电脑 v2rayN 导入链接选为活动节点;手机 v2rayNG 扫码;验证 Google Play、ChatGPT、GitHub、YouTube 4K。卡在订阅支付时提醒:国内卡直付 OpenAI 常被 Stripe 拒,走 iOS 应用内订阅。
 
+## 运维:IP 被封后的判定与换 IP(2026-10 实战)
+
+节点"突然全挂"时,**先定性,别急着重装**。三步 5 分钟:
+
+### ① 判定(区分"机器死了"和"IP 被墙")
+
+| 检查 | 方法 | 读法 |
+|---|---|---|
+| 本地端口矩阵 | 连 22/443/旧端口 + 几个随机端口 | **全 Timeout(静默丢包)= IP 级黑名单**;部分 RST = 端口关闭,机器活着 |
+| 境外回连 | `check-host.net/check-tcp?host=<ip>:443`(API 见 troubleshooting 四) | 境外全通 + 本地全断 = **IP 被墙**,服务器无辜 |
+| 路由 | `tracert -d <ip>` | 能到云厂商骨干(如 Azure `51.10.x.x`)却到不了目标端口 = 定向丢包,不是出口拥堵 |
+
+⚠️ 陷阱:测端口时会发现 **25 端口"OPEN"**——那是国内运营商对 SMTP 的伪响应劫持,连谁都通,不能当连通证据。
+
+### ② 换 IP(服务端一行都不用改)
+
+xray / hysteria 都监听 `0.0.0.0`,NSG/ufw 绑在 NIC/子网上,**换 IP 不影响任何服务配置**,只需更新客户端地址。
+- Azure:`az network public-ip create` → `az network nic ip-config update` → 删旧 IP(命令见 references/azure.md)
+- AWS:分配新 Elastic IP → 关联实例 → **释放旧 IP**(不释放会持续计费)
+
+### ③ 换完必须做的两件事
+
+1. **移除明文 inbound**(VMess/SS)——否则新 IP 会以同样方式再被封,换 IP 只是续命。
+2. **端到端回归**:本地 TCP 可达 → TLS 伪装证书正确 → 客户端实连测速。
+
+### ④ 反复被封的终极方案
+
+套 **Cloudflare**(VLESS + WebSocket + TLS),对外 IP 是 CF 的,封不到源站;代价是延迟 +30~80ms。
+Reality **不能**过 CDN(它依赖直连 TLS 握手特征),要上 CF 必须换传输层。
+
+## 客户端:v2rayN 的 TUN 与分流
+
+服务端通了不等于用着快。全量解剖见 [references/v2rayn-client.md](references/v2rayn-client.md),这里只留最关键的三件事。
+
+### 三种模式的本质差别
+
+| 模式 | 捕获层 | 命令行/游戏/UWP |
+|---|---|---|
+| 系统代理(规则) | 应用层,程序可无视 | 不走 |
+| 系统代理(全局) | **同上,只是规则全转发** | 不走 |
+| TUN | 虚拟网卡 + 路由表 | 走 |
+
+"全局"不改捕获层——不认系统代理的程序照样直连,这是最普遍的误解。
+
+### 一分钟判定在不在分流
+
+```powershell
+$xid = (Get-Process xray).Id
+Get-NetTCPConnection -OwningProcess $xid |
+  Where-Object { $_.RemoteAddress -notmatch '^(127\.|::1|0\.0\.0\.0)' } |
+  Group-Object RemoteAddress | Sort-Object Count -Descending | Select-Object Count, Name -First 15
+```
+
+只有代理服务器 IP = 全局;出现国内 IP = 分流生效。
+
+### 头号坑:DNS 查询全走代理
+
+运行时配置末条 `{ "inboundTag": ["dns-module"], "outboundTag": "proxy" }` 是硬编码的,DNS 查询全部从境外发出,国内域名被解析成海外 CDN。**加 IP 规则、加 /32 路由都改不动它**,只能换 sing-box 核心或自定义 DNS 带 ECS。
+
+### 提权限制(AI 必读)
+
+AI 无法自动提权启动 GUI:UAC 弹窗无人应答、`Start-Process powershell -Verb RunAs` 被安全策略拦。**改完配置后,"以管理员身份启动 v2rayN"必须交给用户手动完成**,AI 只做改配置和事后验证。
+
 ## Reference 索引(按云读取,不要全读)
 
 - [references/azure.md](references/azure.md) — az wrapper、设备码登录、AZURE_CONFIG_DIR 沙箱坑、区域白名单查询、vm create/NSG 完整命令
 - [references/gcp.md](references/gcp.md) — gcloud 安装登录、e2-micro 免费层、美国区建机、防火墙规则、出站流量计费提醒
 - [references/troubleshooting.md](references/troubleshooting.md) — 443 连不通三层诊断、x25519 解析、设备码过期、节点 IP 被墙判断与换 IP
+- [references/v2rayn-client.md](references/v2rayn-client.md) — v2rayN 配置地图、TUN/全局/分流判定、DNS 走代理导致分流失效、TUN 连带影响、提权限制

@@ -77,6 +77,38 @@ $AZW vm user update -g <rg> -n <vm> --username <admin> --ssh-key-value "$PUBKEY"
 
 追加后正常 `ssh -i <key> <admin>@<ip>`。这是"追加"不是重置,原密钥/密码不受影响。
 
+## 更换公网 IP(IP 被墙时的标准操作,2026-10 实测)
+
+**服务端零改动**:xray / hysteria 都监听 `0.0.0.0`,NSG 与 ufw 绑在 NIC / 子网上,换 IP 只影响客户端要填的地址。
+
+```bash
+# 1. 摸现状(资源名不要猜)
+$AZW vm list -d -o table
+$AZW network public-ip list -o table
+$AZW network nic ip-config list -g <rg> --nic-name <nic> -o table     # 通常叫 ipconfig1
+
+# 2. 新建静态 IP(必须同区域;学生订阅注意区域白名单)
+$AZW network public-ip create -g <rg> -n <rg>-ip2 \
+  --sku Standard --allocation-method Static --location <region> \
+  --query "publicIp.ipAddress" -o tsv
+
+# 3. 换绑到网卡的 IP 配置
+$AZW network nic ip-config update -g <rg> --nic-name <nic> -n ipconfig1 \
+  --public-ip-address <rg>-ip2
+
+# 4. 确认生效
+$AZW vm list -d -o table        # PublicIps 应显示新地址
+
+# 5. 释放旧 IP(不释放会继续按小时计费)
+$AZW network public-ip delete -g <rg> -n <旧ip资源名>
+```
+
+要点:
+- 换绑瞬间公网地址切换,但 **xray/hysteria 进程不重启**,已建立的连接会断,客户端重连即可
+- **旧 IP 删除不可逆**:等新 IP 能 SSH 登录、443 握手正常后再删
+- 换完立刻做两件事:①移除同机明文 inbound ②更新客户端地址并实测
+- 验证新 IP 是否也被封:再跑一遍 check-host/端口矩阵,不要假设"新的就一定能用"
+
 ## 清理
 
 ```bash
