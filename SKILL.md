@@ -1,15 +1,26 @@
 ---
 name: vps-reality-builder
-description: 云 VPS 搭建 + VLESS Reality 代理节点部署全流程技能。覆盖 Azure/GCP/任意 Ubuntu VPS:CLI 登录、创建 VM、双层防火墙(NSG+ufw)、Xray Reality 443 部署、客户端 vless 链接与二维码生成、连通性诊断;以及 v2rayN 客户端侧的 TUN/全局/分流配置与卡顿排查(DNS 走代理导致分流失效、国内站变慢)。当用户提到"搭 VPS/建服务器/开云主机/搭节点/Reality/xray/v2rayN 节点/科学上网服务器/美国节点/日本节点/检查 IP/端口不通/开 TUN/全局还是分流/国内网站分流/节点卡顿"等任何涉及购买或配置云服务器做代理的场景时,必须使用本技能,即使用户没有明说"Reality"或"代理"字样。也适用于已部署节点出问题时的排查(端口不通、连不上、IP 被墙、能连但慢)。
+description: 云 VPS 搭建 + VLESS 代理节点部署全流程技能。覆盖 Azure/GCP/任意 Ubuntu VPS 与 Cloady 免费容器平台:CLI 登录、创建 VM、双层防火墙(NSG+ufw)、Xray Reality 443 部署或 Cloady WS+TLS 部署、客户端 vless 链接与二维码生成、连通性诊断;以及 v2rayN 客户端侧的 TUN/全局/分流配置与卡顿排查(DNS 走代理导致分流失效、国内站变慢)。当用户提到"搭 VPS/建服务器/开云主机/搭节点/Reality/xray/v2rayN 节点/科学上网服务器/美国节点/日本节点/检查 IP/端口不通/开 TUN/全局还是分流/国内网站分流/节点卡顿"等任何涉及购买或配置云服务器做代理的场景时,必须使用本技能,即使用户没有明说"Reality"或"代理"字样。也适用于已部署节点出问题时的排查(端口不通、连不上、IP 被墙、能连但慢)。
 ---
 
 # VPS Reality Builder
 
 从零把一台云 VPS 变成 VLESS Reality 代理节点,并输出可直接导入 v2rayN/v2rayNG 的配置。全流程 CLI 驱动,用户只负责账号登录和最终验收。
 
+## 分工:Agent 做事,用户只做三件
+
+本技能面向**任何支持 Agent Skill 的普通 AI Agent**。把技能装给 Agent 之后,分工是固定的:
+
+| 谁做 | 做什么 |
+|---|---|
+| **Agent** | 选云建议、CLI 登录、建 VM、双层防火墙、部署 Reality、端到端验证、生成客户端配置、卡顿/IP 被封排查 |
+| **用户(只做三件)** | ① **注册账号**(云平台账号,按 Agent 给的链接去注册) ② **回答需求**(Agent 提问:要哪个地区、干什么用、要不要长期用) ③ **最终验收**(在自己手机/电脑上连上节点,确认能用) |
+
+账号密码、MFA、邮箱验证码永远由用户本人操作,Agent 不碰凭据;节点密钥只写用户本地文件。
+
 ## 铁律(先读这个)
 
-1. **绝不用浏览器自动化操作云门户**。本机环境拉起的浏览器窗口用户看不到(渲染正常但 GUI 不显示),用户没法在里面登录。一律走 CLI + 设备码登录,登录动作(密码/MFA)永远由用户本人完成,AI 不碰凭据。
+1. **绝不用浏览器自动化操作云门户**。本机环境拉起的浏览器窗口用户看不到(渲染正常但 GUI 不显示),用户没法在里面登录。一律走 CLI + 设备码登录,登录动作(密码/MFA)永远由用户本人完成,AI 不碰凭据。例外只有一种:平台登录方式本身就是邮箱验证码(验证码由用户在聊天里提供,AI 全程不碰密码),且平台没有可用的 CLI 登录方式;即便如此,有 CLI 或 MCP 时优先走 CLI。2026-11-05 实测:Cloady 邮箱验证码登录走浏览器跑通,登录页 Cloudflare Turnstile 在个别环境下连续拒绝,换环境后通过。
 2. **节点密钥绝不外泄**。UUID/私钥/分享链接只写入用户本地文件(如 `vless-node-info.md`),不打印到无关日志、不提交任何仓库、不放进记忆文件。
 3. **改 xray 配置前必须 `-test` 校验,失败立即用 `.bak` 回滚**。用户现有节点往往在跑,服务中断是事故。
 4. **新增 inbound 共存,但明文协议绝不许与 Reality 同机**——旧节点可能还在用,所以默认保留;但 VMess / Shadowsocks 这类**无 TLS 明文协议**一旦被识别,GFW 封的是**整个 IP**,会把同机的 Reality、Hysteria2 一起拖死(2026-10-29 实战:10086 明文 VMess 导致 Reality+Hysteria2 全灭)。发现同机存在明文 inbound,必须向用户明确提示风险并建议移除。
@@ -27,14 +38,25 @@ description: 云 VPS 搭建 + VLESS Reality 代理节点部署全流程技能。
 
 ### ① 选云(先问清用户的"地区"需求)
 
+### 先问一句:是不是学生(有学生认证吗)
+
+学生和非学生的可选范围不一样,先确认身份再推荐:
+
+- **学生(有学生认证)**:优先 Azure for Students——$100/年、**不用绑卡**;要美国节点走 AWS($200 额度)或 GCP($300 试用);不要钱走 Cloady $0 免费档。
+- **非学生**:没有 Azure 学生版和学生包。优先 GCP $300/90 天或 AWS $200/6 个月(都要绑卡);不想绑卡只剩 Cloady $0 免费档。
+
 | 云 | 学生额度 | 区域限制 | 适用 |
 |---|---|---|---|
-| Azure for Students | $100/年 | **有系统区域白名单**,美国区全封死 | 亚太节点(日/韩/新/马/印尼) |
-| GCP 免费试用 | $300/90天,无需学生认证,绑卡即得 | 无 | **美国节点首选** |
+| AWS | 新账号 $200 额度/6 个月,EC2 从额度里扣(2025-07-15 前老账号:750 小时/月 t2.micro 12 个月) | 无 | ✅ 已确认跑通;美国区首选之一,需绑卡,记得设账单告警;**CLI 完备,Agent 操作友好** |
+| Azure for Students | $100/年 | **有系统区域白名单**,美国区全封死 | ✅ 已确认跑通;亚太节点(日/韩/新/马/印尼);**az CLI 完备,Agent 操作友好** |
+| GCP 免费试用 | $300/90天,无需学生认证,绑卡即得 | 无 | 美国节点首选 |
 | DigitalOcean(学生包) | $200/1年 | 无 | 备胎 |
+| Cloady 免费档(容器平台,非 VPS) | $0 永久,0.5 vCPU/1GB/5GB,不绑卡 | usw1 等区域免费 | ✅ 已确认跑通(2026-11-05 实测);**不要钱、快速上线首选**;WS+TLS,延迟比直连高 |
 | 任意裸 VPS | - | 无 | 通用 |
 
-**Azure 区域白名单是订阅级系统策略,用户改不了,别浪费时间试**。查询方法见 [references/azure.md](references/azure.md)。用户要美国 IP 时直接推荐 GCP。提醒用户:订阅 ChatGPT、谷歌商店、GitHub 等**不需要美国 IP**(日韩新加坡均支持),先确认真实需求再选区,能省一半延迟。
+**Azure 区域白名单是订阅级系统策略,用户改不了,别浪费时间试**。查询方法见 [references/azure.md](references/azure.md)。用户要美国 IP 时直接推荐 AWS 或 GCP。提醒用户:订阅 ChatGPT、谷歌商店、GitHub 等**不需要美国 IP**(日韩新加坡均支持),先确认真实需求再选区,能省一半延迟。
+
+**选云优先看 CLI 完备度**:AWS 与 Azure 的 CLI 覆盖最全,Agent 全程 CLI 操作最顺手,优先推荐;需要浏览器操作的平台一律降级(见铁律 1)。
 
 ### ② CLI 登录(参考各云 reference)
 
@@ -58,6 +80,14 @@ description: 云 VPS 搭建 + VLESS Reality 代理节点部署全流程技能。
 
 **关键坑:Xray 26.x 的 `xray x25519` 输出格式是 `PrivateKey: xxx` 和 `Password (PublicKey): xxx`(冒号后无空格、字段名带空格变化),解析必须用 `awk -F': *' '{print $2}'` 兜底,拿到空值就是事故**(会导致配置校验失败、服务中断)。脚本已内置健壮解析。
 
+### ④-B Cloady 容器部署(免费档,VLESS + WS + TLS)
+
+不走 VPS 时的另一条路,全流程见 [references/cloady.md](references/cloady.md)。只留要点:
+
+1. 邮箱验证码注册,新建 workspace 与应用(区域 usw1,环境 production),部署前先在 Billing 页核实免费档仍在(PLAN: Free,月费 $0.00);出现 `payment_required` 说明超出免费额度,先缩小配置,不要绑卡硬上。
+2. 文件夹上传三个文件:`Dockerfile`(多阶段构建,官方 xray 镜像没有 shell,必须把二进制拷进 Alpine)、`docker-compose.yml`(端口 `3000:3000`,资源限制 0.5 CPU/512M)、`config.json`(VLESS + WS,容器内监听 3000,TLS 由平台边缘终结)。可用 `scripts/gen_cloady_ws.sh <目标目录>` 一键生成。
+3. 平台自动签发通配符 TLS 证书,对外 443,域名形如 `<应用名>-<随机码>-<workspace>.cloady.io`。
+
 ### ⑤ 端到端验证(部署完必做,按顺序)
 
 ```bash
@@ -68,6 +98,8 @@ echo | openssl s_client -connect <IP>:443 -servername <SNI> 2>/dev/null | grep -
 ```
 
 不通就按 troubleshooting 的三层顺序查:云安全组 → ufw → 网络路径/GFW。
+
+WS + TLS 节点(Cloady)的验证不同:域名可解析后,对 WS 路径发 HTTPS 请求应返回 **400**(xray 对非 WS 请求的正常响应),根路径 404 也正常;再把 `vless://` 链接导入 v2rayNG 实连。延迟与速度不要用部署侧的机器代测:2026-11-05 教训,本机出站经出口代理中转,TLS 握手被中间人拦截,直连建连时间测到的是网关不是节点,5 次重试退避还会被误读成延迟;真实数字必须在用户手机 v2rayNG 里测(节点延迟测试 + 实际打开网页/下载)。
 
 ### ⑥ 客户端配置(`scripts/gen_client_config.py`)
 
@@ -144,5 +176,6 @@ AI 无法自动提权启动 GUI:UAC 弹窗无人应答、`Start-Process powershe
 
 - [references/azure.md](references/azure.md) — az wrapper、设备码登录、AZURE_CONFIG_DIR 沙箱坑、区域白名单查询、vm create/NSG 完整命令
 - [references/gcp.md](references/gcp.md) — gcloud 安装登录、e2-micro 免费层、美国区建机、防火墙规则、出站流量计费提醒
+- [references/cloady.md](references/cloady.md) — Cloady 免费档核实、邮箱验证码注册、Dockerfile 多阶段构建、compose 部署、WS+TLS 端到端验证、与 VPS Reality 的取舍
 - [references/troubleshooting.md](references/troubleshooting.md) — 443 连不通三层诊断、x25519 解析、设备码过期、节点 IP 被墙判断与换 IP
 - [references/v2rayn-client.md](references/v2rayn-client.md) — v2rayN 配置地图、TUN/全局/分流判定、DNS 走代理导致分流失效、TUN 连带影响、提权限制
