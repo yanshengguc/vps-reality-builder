@@ -1,0 +1,5 @@
+name: "vps-reality-builder"
+title: "VPS Reality Builder"
+description: "把云 VPS 或免费容器平台变成 VLESS 节点并输出可导入 v2rayN/v2rayNG 的配置，覆盖选云、部署、端到端验证、IP 被封处置与客户端分流排查。"
+category: "Work and knowledge"
+include_in_prompt: false
