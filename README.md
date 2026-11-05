@@ -1,8 +1,8 @@
 # VPS Reality Builder
 
-> **VLESS + Reality 部署 | Xray | Azure / GCP / Cloady | v2rayN / v2rayNG 客户端排查**
+> **VLESS + Reality 部署 | Xray | Azure / GCP / Cloady | 客户端自选(v2rayN / v2rayNG / Clash 系)**
 >
-> 一个 AI Agent 可执行的云服务器搭建技能:从零把一台云主机(或免费容器)变成 VLESS 节点,并输出可直接导入 v2rayN / v2rayNG 的客户端配置。全流程 CLI 驱动,沉淀了实战中踩过的全部坑。
+> 一个 AI Agent 可执行的云服务器搭建技能:从零把一台云主机(或免费容器)变成 VLESS 节点,并输出标准 vless 链接,用你喜欢的客户端导入(v2rayN / v2rayNG / Clash 系 / NekoBox 等)。全流程 CLI 驱动,沉淀了实战中踩过的全部坑。
 >
 > **给谁用:任何支持 Agent Skill 的普通 AI 助手。** 把技能装给你的 AI 助手之后,你只需要做三件事:① **注册账号**(按助手给的链接去云平台注册) ② **回答需求**(助手提问:要哪个地区、干什么用、要不要长期用) ③ **最终验收**(在自己手机/电脑上连上节点,确认能用)。剩下的选云、登录、建机、部署、验证、排查,全部由 Agent 做。账号密码、验证码永远由你本人操作,Agent 不碰凭据。
 
@@ -66,6 +66,7 @@ vps-reality-builder/
     ├── azure.md                    # az CLI wrapper、设备码登录、区域限制策略、NSG 命令、换公网 IP
     ├── gcp.md                      # gcloud 登录、e2-micro 免费层、防火墙规则
     ├── cloady.md                   # Cloady 免费档核实、邮箱验证码注册、多阶段 Dockerfile、WS+TLS 验证
+    ├── clients.md                  # 客户端自选:v2rayN/v2rayNG/Clash 系/NekoBox/Streisand/sing-box 导入方式
     ├── oracle.md                   # Oracle Cloud:oci CLI、API 密钥/会话令牌、新加坡首选,免费档建机待实测
     ├── troubleshooting.md          # 端口不通三层诊断、x25519 解析坑、卡顿诊断、IP 被墙判断
     └── v2rayn-client.md            # v2rayN 客户端:配置地图、TUN/全局/分流判定、DNS 走代理陷阱
