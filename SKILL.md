@@ -1,11 +1,11 @@
 ---
 name: vps-reality-builder
-description: 云 VPS 搭建 + VLESS 代理节点部署全流程技能。覆盖 Azure/GCP/任意 Ubuntu VPS 与 Cloady 免费容器平台:CLI 登录、创建 VM、双层防火墙(NSG+ufw)、Xray Reality 443 部署或 Cloady WS+TLS 部署、客户端 vless 链接与二维码生成、连通性诊断;以及 v2rayN 客户端侧的 TUN/全局/分流配置与卡顿排查(DNS 走代理导致分流失效、国内站变慢)。当用户提到"搭 VPS/建服务器/开云主机/搭节点/Reality/xray/v2rayN 节点/科学上网服务器/美国节点/日本节点/检查 IP/端口不通/开 TUN/全局还是分流/国内网站分流/节点卡顿"等任何涉及购买或配置云服务器做代理的场景时,必须使用本技能,即使用户没有明说"Reality"或"代理"字样。也适用于已部署节点出问题时的排查(端口不通、连不上、IP 被墙、能连但慢)。
+description: 云 VPS 搭建 + VLESS 代理节点部署全流程技能。覆盖 Azure/GCP/任意 Ubuntu VPS 与 Cloady 免费容器平台:CLI 登录、创建 VM、双层防火墙(NSG+ufw)、Xray Reality 443 部署或 Cloady WS+TLS 部署、标准 vless 链接与二维码生成(客户端自选:v2rayN/v2rayNG/Clash 系/NekoBox 等)、连通性诊断;以及 v2rayN 客户端侧的 TUN/全局/分流配置与卡顿排查(DNS 走代理导致分流失效、国内站变慢)。当用户提到"搭 VPS/建服务器/开云主机/搭节点/Reality/xray/v2rayN 节点/科学上网服务器/美国节点/日本节点/检查 IP/端口不通/开 TUN/全局还是分流/国内网站分流/节点卡顿"等任何涉及购买或配置云服务器做代理的场景时,必须使用本技能,即使用户没有明说"Reality"或"代理"字样。也适用于已部署节点出问题时的排查(端口不通、连不上、IP 被墙、能连但慢)。
 ---
 
 # VPS Reality Builder
 
-从零把一台云 VPS 变成 VLESS Reality 代理节点,并输出可直接导入 v2rayN/v2rayNG 的配置。全流程 CLI 驱动,用户只负责账号登录和最终验收。
+从零把一台云 VPS 变成 VLESS Reality 代理节点,并输出标准 vless 链接,用你喜欢的客户端导入(v2rayN/v2rayNG/Clash 系/NekoBox 等)。全流程 CLI 驱动,用户只负责账号登录和最终验收。
 
 ## 分工:Agent 做事,用户只做三件
 
@@ -99,15 +99,17 @@ echo | openssl s_client -connect <IP>:443 -servername <SNI> 2>/dev/null | grep -
 
 不通就按 troubleshooting 的三层顺序查:云安全组 → ufw → 网络路径/GFW。
 
-WS + TLS 节点(Cloady)的验证不同:域名可解析后,对 WS 路径发 HTTPS 请求应返回 **400**(xray 对非 WS 请求的正常响应),根路径 404 也正常;再把 `vless://` 链接导入 v2rayNG 实连。延迟与速度不要用部署侧的机器代测:2026-11-05 教训,本机出站经出口代理中转,TLS 握手被中间人拦截,直连建连时间测到的是网关不是节点,5 次重试退避还会被误读成延迟;真实数字必须在用户手机 v2rayNG 里测(节点延迟测试 + 实际打开网页/下载)。
+WS + TLS 节点(Cloady)的验证不同:域名可解析后,对 WS 路径发 HTTPS 请求应返回 **400**(xray 对非 WS 请求的正常响应),根路径 404 也正常;再把 `vless://` 链接导入用户选定的客户端实连。延迟与速度不要用部署侧的机器代测:2026-11-05 教训,本机出站经出口代理中转,TLS 握手被中间人拦截,直连建连时间测到的是网关不是节点,5 次重试退避还会被误读成延迟;真实数字必须在用户手机客户端里测(节点延迟测试 + 实际打开网页/下载)。
 
 ### ⑥ 客户端配置(`scripts/gen_client_config.py`)
 
-生成三件套到工作区:`vless://` 分享链接(v2rayN 粘贴导入)、二维码 PNG(v2rayNG 扫码)、参数明细 Markdown(含服务器 SSH 信息与变更记录,文件头标注"仅限本人,勿外传勿提交")。二维码依赖 `qrcode` 库(装在隔离 venv)。
+生成三件套到工作区:`vless://` 分享链接、二维码 PNG、参数明细 Markdown(含服务器 SSH 信息与变更记录,文件头标注"仅限本人,勿外传勿提交")。二维码依赖 `qrcode` 库(装在隔离 venv)。
+
+**客户端按用户喜好自选,不替用户定**:先问用户用什么客户端(v2rayN/v2rayNG/Clash 系/NekoBox/Streisand/sing-box 等);没偏好默认 v2rayN/v2rayNG。vless 链接与二维码可直接导入 v2rayN/v2rayNG/NekoBox/Streisand/sing-box 系客户端;Clash 系(Mihomo 内核)不直接吃 vless 链接,需用参数明细手动填代理配置或走订阅转换,不要硬说链接通用。详见 [references/clients.md](references/clients.md)。
 
 ### ⑦ 用户验收清单
 
-电脑 v2rayN 导入链接选为活动节点;手机 v2rayNG 扫码;验证 Google Play、ChatGPT、GitHub、YouTube 4K。卡在订阅支付时提醒:国内卡直付 OpenAI 常被 Stripe 拒,走 iOS 应用内订阅。
+用用户选定的客户端导入并设为活动节点(电脑 v2rayN 导入链接,手机 v2rayNG 扫码,Clash 系见 references/clients.md);验证 Google Play、ChatGPT、GitHub、YouTube 4K。卡在订阅支付时提醒:国内卡直付 OpenAI 常被 Stripe 拒,走 iOS 应用内订阅。
 
 ## 运维:IP 被封后的判定与换 IP(2026-10 实战)
 
