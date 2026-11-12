@@ -34,6 +34,8 @@ description: 云 VPS 搭建 + VLESS 代理节点部署全流程技能。覆盖 A
 ```
 ① 选云 → ② CLI 登录(设备码) → ③ 建 VM + 开端口 → ④ SSH 部署 Reality
 → ⑤ 端到端验证 → ⑥ 生成客户端配置(链接+二维码) → ⑦ 用户双端验收
+
+零成本 / 不想绑卡分支:③④ 换成 ④-B Cloady 免费容器(VLESS + WS + TLS,无 SSH)
 ```
 
 ### ① 选云(先问清用户的"地区"需求)
@@ -51,6 +53,7 @@ description: 云 VPS 搭建 + VLESS 代理节点部署全流程技能。覆盖 A
 | Azure for Students | $100/年 | **有系统区域白名单**,美国区全封死 | ✅ 已确认跑通;亚太节点(日/韩/新/马/印尼);**az CLI 完备,Agent 操作友好** |
 | GCP 免费试用 | $300/90天,无需学生认证,绑卡即得 | 无 | 美国节点首选 |
 | DigitalOcean(学生包) | $200/1年 | 无 | 备胎 |
+| 甲骨文 OCI Always Free | 永久免费:2 OCPU / 12GB ARM + 2 台 AMD 微型机(2026-06 砍半) | 无 | 新加坡/东京可选;需绑卡 $1 验证,**新加坡 Ampere 常无库存要抢**;CLI(`oci`)可用但建机部署**未实测** |
 | Cloady 免费档(容器平台,非 VPS) | $0 永久,0.5 vCPU/1GB/5GB,不绑卡 | usw1 等区域免费 | ✅ 已确认跑通(2026-11-05 实测);**不要钱、快速上线首选**;WS+TLS,延迟比直连高 |
 | 任意裸 VPS | - | 无 | 通用 |
 
@@ -176,8 +179,11 @@ AI 无法自动提权启动 GUI:UAC 弹窗无人应答、`Start-Process powershe
 
 ## Reference 索引(按云读取,不要全读)
 
+- [references/aws.md](references/aws.md) — 免费额度新老账号差异、账单告警、建机与安全组、删机防扣费
 - [references/azure.md](references/azure.md) — az wrapper、设备码登录、AZURE_CONFIG_DIR 沙箱坑、区域白名单查询、vm create/NSG 完整命令
 - [references/gcp.md](references/gcp.md) — gcloud 安装登录、e2-micro 免费层、美国区建机、防火墙规则、出站流量计费提醒
 - [references/cloady.md](references/cloady.md) — Cloady 免费档核实、邮箱验证码注册、Dockerfile 多阶段构建、compose 部署、WS+TLS 端到端验证、与 VPS Reality 的取舍
+- [references/oracle.md](references/oracle.md) — 甲骨文 Always Free 现状、oci CLI 两种认证、建机待实测(草稿状态)
+- [references/clients.md](references/clients.md) — 各客户端导入方式对照表(v2rayN/v2rayNG/NekoBox/Streisand/sing-box/Clash 系)
 - [references/troubleshooting.md](references/troubleshooting.md) — 443 连不通三层诊断、x25519 解析、设备码过期、节点 IP 被墙判断与换 IP
 - [references/v2rayn-client.md](references/v2rayn-client.md) — v2rayN 配置地图、TUN/全局/分流判定、DNS 走代理导致分流失效、TUN 连带影响、提权限制
