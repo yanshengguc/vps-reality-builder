@@ -48,7 +48,10 @@ ports = [i.get('port') for i in c.get('inbounds', [])]
 if port in ports:
     print(f"PORT {port} 已存在 inbound,跳过合并(如需重建请先手动清理)")
     sys.exit(2)
-c['inbounds'].append({
+# Xray 26.11+ 的官方默认配置是空对象 {},必须自己建 inbounds/outbounds
+if not c.get('outbounds'):
+    c['outbounds'] = [{"protocol": "freedom", "tag": "direct"}]
+c.setdefault('inbounds', []).append({
     "listen": "0.0.0.0", "port": port, "protocol": "vless",
     "settings": {"clients": [{"id": uuid, "flow": "xtls-rprx-vision"}], "decryption": "none"},
     "streamSettings": {
